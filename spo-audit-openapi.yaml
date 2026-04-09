@@ -1,0 +1,222 @@
+openapi: 3.0.1
+info:
+  title: SharePoint Audit API
+  description: >
+    REST API to audit SharePoint Online sites and subsites.
+    Returns privacy, Teams/Channel association, external sharing,
+    last modification date, storage, owners, M365 group owners, and site admins.
+  version: "1.0"
+servers:
+  - url: https://spo-audit-api.azurewebsites.net/api
+    description: Azure Function backend
+
+paths:
+  /SPOAudit:
+    get:
+      operationId: GetAllSites
+      summary: Get all SharePoint site collections in the tenant
+      description: >
+        Enumerates all SharePoint Online site collections. Use this as the
+        starting point for a full tenant audit. Returns site URLs, names, and group IDs.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [getAllSites]
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Azure Function authentication key
+      responses:
+        "200":
+          description: Array of site summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SiteSummary"
+
+  /SPOAudit#profile:
+    get:
+      operationId: GetSiteProfile
+      summary: Get the full governance profile for a SharePoint site
+      description: >
+        Returns privacy status (Public/Private/Not Applicable), external sharing
+        configuration and type, last content modification date, storage usage in MB,
+        and the linked M365 group ID. Marks Communication Sites and Hub Sites as
+        Not Applicable for privacy.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [getSiteProfile]
+        - name: siteUrl
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Full URL of the SharePoint site (e.g. https://contoso.sharepoint.com/sites/hr)
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Site governance profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteProfile"
+
+  /SPOAudit#teams:
+    get:
+      operationId: CheckTeamsAssociation
+      summary: Check if an M365 group has a Microsoft Teams team provisioned
+      description: >
+        Given the M365 group ID linked to a SharePoint site, determines whether
+        a Teams team has been provisioned for that group. Returns true/false and
+        the team name if present.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [checkTeams]
+        - name: groupId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: GUID of the M365 group linked to the site
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Teams association result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamsAssociation"
+
+  /SPOAudit#channels:
+    get:
+      operationId: GetTeamsChannels
+      summary: Get private and shared Teams channels linked to a team
+      description: >
+        Returns all non-standard (private or shared) channels for a given
+        Teams group. Each channel has its own SharePoint site. Use this to
+        determine channel-site association.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [getChannels]
+        - name: teamId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: GUID of the Teams team
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of private/shared channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChannelInfo"
+
+  /SPOAudit#owners:
+    get:
+      operationId: GetSiteOwnersAndAdmins
+      summary: Get SharePoint owners, M365 group owners, and site admins
+      description: >
+        Returns three owner/admin lists for a site: (1) members of the SharePoint
+        Owners permission group, (2) owners of the linked M365 group if applicable,
+        (3) site collection administrators.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [getOwnersAndAdmins]
+        - name: siteUrl
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Owners and admins
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteOwnership"
+
+components:
+  schemas:
+    SiteSummary:
+      type: object
+      properties:
+        id:          { type: string }
+        displayName: { type: string }
+        webUrl:      { type: string }
+
+    SiteProfile:
+      type: object
+      properties:
+        siteId:           { type: string }
+        displayName:      { type: string }
+        webUrl:           { type: string }
+        groupId:          { type: string, nullable: true }
+        privacy:          { type: string, description: "Public | Private | Not Applicable" }
+        storageUsedMB:    { type: number }
+        lastModified:     { type: string, format: date-time }
+        externalSharing:  { type: object }
+
+    TeamsAssociation:
+      type: object
+      properties:
+        hasTeams:  { type: boolean }
+        teamId:    { type: string, nullable: true }
+        teamName:  { type: string, nullable: true }
+
+    ChannelInfo:
+      type: object
+      properties:
+        id:               { type: string }
+        displayName:      { type: string }
+        membershipType:   { type: string, description: "private | shared" }
+        filesFolderWebUrl:{ type: string }
+
+    SiteOwnership:
+      type: object
+      properties:
+        sharePointOwners: { type: array, items: { type: object } }
+        m365GroupOwners:  { type: array, items: { type: object } }
