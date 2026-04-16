@@ -6,7 +6,7 @@ info:
     Fetches SharePoint site configuration, governance, permissions,
     sharing policies, teams associations, activity, storage, owners,
     and admins via Microsoft Graph API for Security Copilot agents.
-  version: "2.0.0"
+  version: "2.1.0"
   contact:
     name: Security Engineering Team
 
@@ -23,21 +23,33 @@ paths:
     get:
       operationId: ListAllSites
       summary: List all SharePoint site collections in the tenant
+      description: >
+        Returns all SharePoint Online site collections.
+        IMPORTANT: Graph API requires BOTH the ConsistencyLevel header set to
+        "eventual" AND the $search query parameter to be present. Omitting
+        either will cause HTTP 400 BadRequest. Both are marked required here
+        so Security Copilot sends them on every invocation.
       parameters:
         - name: ConsistencyLevel
           in: header
           required: true
           schema:
             type: string
-            enum: ["eventual"]
-            default: "eventual"
-          description: Required by Graph API when using $search on sites
+            enum:
+              - eventual
+          description: >
+            Must be exactly "eventual". Required by Graph API for the
+            /sites?$search endpoint. Cannot be omitted.
         - name: $search
           in: query
-          required: false
+          required: true
           schema:
             type: string
-            default: "*"
+            enum:
+              - "*"
+          description: >
+            Must be "*" to return all sites. This parameter is mandatory
+            for the /sites endpoint — Graph API returns 400 without it.
         - name: $select
           in: query
           required: false
@@ -47,6 +59,14 @@ paths:
       responses:
         '200':
           description: List of site collections
+        '400':
+          description: >
+            Bad request. Caused by missing ConsistencyLevel header or
+            missing/invalid $search parameter.
+        '403':
+          description: >
+            Forbidden. Sites.Read.All application permission not granted
+            or admin consent not completed.
 
   /sites/{siteId}:
     get:
@@ -58,6 +78,9 @@ paths:
           required: true
           schema:
             type: string
+          description: >
+            SharePoint site ID. Use hostname:/sites/SiteName format or
+            the GUID-based ID returned from ListAllSites.
         - name: $select
           in: query
           required: false
