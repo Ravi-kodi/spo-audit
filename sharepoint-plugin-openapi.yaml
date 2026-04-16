@@ -1,0 +1,332 @@
+openapi: 3.0.0
+ 
+info:
+  title: SharePoint Configuration & Governance Plugin
+  description: >
+    Fetches SharePoint site configuration, governance, permissions,
+    sharing policies, teams associations, activity, storage, owners,
+    and admins via Microsoft Graph API for Security Copilot agents.
+  version: "2.0.0"
+  contact:
+    name: Security Engineering Team
+ 
+servers:
+  - url: https://graph.microsoft.com/v1.0
+    description: Microsoft Graph API v1.0
+ 
+security:
+  - oauth2ClientCredentials: []
+ 
+paths:
+ 
+  /sites:
+    get:
+      operationId: ListAllSites
+      summary: List all SharePoint site collections in the tenant
+      parameters:
+        - name: $search
+          in: query
+          required: true
+          schema: { type: string, default: "*" }
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime"
+      responses:
+        '200': { description: List of site collections }
+ 
+  /sites/{siteId}:
+    get:
+      operationId: GetSiteDetails
+      summary: Get configuration details and sharepointIds for a specific site
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,webUrl,sharepointIds,createdDateTime"
+      responses:
+        '200': { description: Site details including sharepointIds for dependency resolution }
+ 
+  # GetSiteVisibility uses the same /sites/{siteId} path with $select=sharepointIds
+  # then calls /groups/{groupId}?$select=visibility
+ 
+  /groups/{groupId}:
+    get:
+      operationId: GetSiteVisibility
+      summary: Get the visibility (Public/Private/N/A) of a SharePoint site
+      description: >
+        Resolves the M365 group visibility (Public or Private). Returns
+        NotApplicable for Hub sites, Communication sites, and classic sites
+        with no M365 group. groupId obtained from GetSiteDetails sharepointIds.
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "visibility,groupTypes,resourceProvisioningOptions"
+      responses:
+        '200': { description: Group visibility and type details }
+ 
+  /sites/{siteId}/permissions:
+    get:
+      operationId: GetSitePermissions
+      summary: Retrieve all permission grants for a SharePoint site
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Permission grants for the site }
+ 
+  /groups/{groupId}/team:
+    get:
+      operationId: GetSiteTeamsAssociation
+      summary: Check if a SharePoint site is associated with a Microsoft Teams team
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema: { type: string, default: "id,displayName,webUrl" }
+      responses:
+        '200': { description: Teams team details if associated }
+        '404': { description: No Teams team provisioned for this group }
+ 
+  /teams/{teamId}/channels:
+    get:
+      operationId: GetSiteChannelAssociation
+      summary: Check if a SharePoint site backs a Teams private or shared channel
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,membershipType,filesFolderWebUrl"
+        - name: $filter
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "membershipType eq 'private' or membershipType eq 'shared'"
+      responses:
+        '200': { description: Channel list with SharePoint site URL per channel }
+ 
+  /sites/{siteId}/lists:
+    get:
+      operationId: ListSiteLists
+      summary: List all lists and document libraries in a site
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,list,createdDateTime,webUrl"
+      responses:
+        '200': { description: All lists and libraries in the site }
+ 
+  /sites/{siteId}/lists/{listId}:
+    get:
+      operationId: GetListSettings
+      summary: Get detailed configuration for a specific list or library
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: listId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $expand
+          in: query
+          required: false
+          schema: { type: string, default: "contentTypes,columns" }
+      responses:
+        '200': { description: List configuration including versioning and content types }
+ 
+  /sites/{siteId}/settings:
+    get:
+      operationId: GetSharingSettings
+      summary: Get external sharing status and policy type for a SharePoint site
+      description: >
+        Returns site-level sharingCapability. When null (site inherits
+        tenant default), also call GetTenantSharingSettings.
+        Enum mapping: Disabled=Off, ExistingExternalUserSharingOnly=Existing
+        Guests, ExternalUserSharingOnly=New+Existing, ExternalUserAndGuestSharing=Anyone.
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "sharingCapability,sharingDomainRestrictionMode,sharingAllowedDomainList"
+      responses:
+        '200': { description: Site sharing and governance settings }
+ 
+  /admin/sharepoint/settings:
+    get:
+      operationId: GetTenantSharingSettings
+      summary: Get tenant-level SharePoint sharing defaults (fallback)
+      description: >
+        Fallback — call when site-level sharingCapability is null.
+        Requires SharePointTenantSettings.Read.All permission.
+      parameters:
+        - name: $select
+          in: query
+          required: false
+          schema: { type: string, default: "sharingCapability,defaultSharingLinkType" }
+      responses:
+        '200': { description: Tenant-level sharing configuration }
+ 
+  /sites/{siteId}/analytics/allTime:
+    get:
+      operationId: GetSiteActivity
+      summary: Get last activity date for a SharePoint site including read access
+      description: >
+        Returns site activity stats including read access events.
+        Falls back to lastModifiedDateTime if analytics data unavailable.
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Site activity statistics }
+ 
+  /sites/{siteId}/drive:
+    get:
+      operationId: GetSiteStorageUsage
+      summary: Get current storage usage and quota for a SharePoint site
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema: { type: string, default: "quota,name,webUrl" }
+      responses:
+        '200': { description: Drive quota and storage usage details }
+ 
+  /groups/{groupId}/owners:
+    get:
+      operationId: GetSiteGroupOwners
+      summary: Get the owners of the M365 group linked to a SharePoint site
+      description: >
+        Returns the M365 group owner list (= effective site owners for
+        modern team sites). Empty array = orphaned site (HIGH RISK).
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema: { type: string, default: "displayName,userPrincipalName,mail,id,jobTitle" }
+      responses:
+        '200': { description: List of group owners }
+ 
+  # GetSiteAdmins reuses /sites/{siteId}/permissions with $filter=roles/any(r: r eq 'fullControl')
+ 
+  /admin/sharepoint/sites/{spoSiteId}:
+    get:
+      operationId: GetSiteAdminDetails
+      summary: Get definitive site collection admin list from SharePoint Admin API
+      description: >
+        Authoritative source for site collection admins. Use the
+        SharePoint site GUID (sharepointIds.siteId), not the Graph composite ID.
+        Requires SharePointTenantSettings.Read.All permission.
+      parameters:
+        - name: spoSiteId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $select
+          in: query
+          required: false
+          schema: { type: string, default: "siteCollectionAdmins,primaryAdmin,url" }
+      responses:
+        '200': { description: Site collection admins and primary admin }
+ 
+  /sites/{siteId}/columns:
+    get:
+      operationId: GetSiteColumns
+      summary: Get the site column schema for governance and classification
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Site column definitions }
+ 
+  /sites/{siteId}/contentTypes:
+    get:
+      operationId: GetSiteContentTypes
+      summary: List all content types defined in the site
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $expand
+          in: query
+          required: false
+          schema: { type: string, default: "columns" }
+      responses:
+        '200': { description: Content types and their column schemas }
+ 
+  /sites/{siteId}/termStore:
+    get:
+      operationId: GetTermStore
+      summary: Get the term store and managed metadata config for a site
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Term store configuration and groups }
+ 
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token
+          scopes:
+            https://graph.microsoft.com/.default: Default Graph API scope
