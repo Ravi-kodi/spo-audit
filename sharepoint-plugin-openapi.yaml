@@ -19,23 +19,31 @@ security:
  
 paths:
  
-  /sites:
-    get:
-      operationId: ListAllSites
-      summary: List all SharePoint site collections in the tenant
-      parameters:
-        - name: $search
-          in: query
-          required: true
-          schema: { type: string, default: "*" }
-        - name: $select
-          in: query
-          required: false
-          schema:
-            type: string
-            default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime"
-      responses:
-        '200': { description: List of site collections }
+/sites:
+  get:
+    operationId: ListAllSites
+    summary: List all SharePoint site collections in the tenant
+    parameters:
+      - name: ConsistencyLevel
+        in: header
+        required: true
+        schema:
+          type: string
+          enum: ["eventual"]
+          default: "eventual"
+        description: Required by Graph API when using $search on sites
+      - name: $search
+        in: query
+        required: false
+        schema: { type: string, default: "*" }
+      - name: $select
+        in: query
+        required: false
+        schema:
+          type: string
+          default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime"
+    responses:
+      '200': { description: List of site collections }
  
   /sites/{siteId}:
     get:
