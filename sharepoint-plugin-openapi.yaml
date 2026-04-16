@@ -1,5 +1,5 @@
 openapi: 3.0.0
- 
+
 info:
   title: SharePoint Configuration & Governance Plugin
   description: >
@@ -9,42 +9,45 @@ info:
   version: "2.0.0"
   contact:
     name: Security Engineering Team
- 
+
 servers:
   - url: https://graph.microsoft.com/v1.0
     description: Microsoft Graph API v1.0
- 
+
 security:
   - oauth2ClientCredentials: []
- 
+
 paths:
- 
-/sites:
-  get:
-    operationId: ListAllSites
-    summary: List all SharePoint site collections in the tenant
-    parameters:
-      - name: ConsistencyLevel
-        in: header
-        required: true
-        schema:
-          type: string
-          enum: ["eventual"]
-          default: "eventual"
-        description: Required by Graph API when using $search on sites
-      - name: $search
-        in: query
-        required: false
-        schema: { type: string, default: "*" }
-      - name: $select
-        in: query
-        required: false
-        schema:
-          type: string
-          default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime"
-    responses:
-      '200': { description: List of site collections }
- 
+
+  /sites:
+    get:
+      operationId: ListAllSites
+      summary: List all SharePoint site collections in the tenant
+      parameters:
+        - name: ConsistencyLevel
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: ["eventual"]
+            default: "eventual"
+          description: Required by Graph API when using $search on sites
+        - name: $search
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "*"
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime"
+      responses:
+        '200':
+          description: List of site collections
+
   /sites/{siteId}:
     get:
       operationId: GetSiteDetails
@@ -53,7 +56,8 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
@@ -61,11 +65,9 @@ paths:
             type: string
             default: "id,displayName,webUrl,sharepointIds,createdDateTime"
       responses:
-        '200': { description: Site details including sharepointIds for dependency resolution }
- 
-  # GetSiteVisibility uses the same /sites/{siteId} path with $select=sharepointIds
-  # then calls /groups/{groupId}?$select=visibility
- 
+        '200':
+          description: Site details including sharepointIds for dependency resolution
+
   /groups/{groupId}:
     get:
       operationId: GetSiteVisibility
@@ -78,7 +80,8 @@ paths:
         - name: groupId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
@@ -86,8 +89,9 @@ paths:
             type: string
             default: "visibility,groupTypes,resourceProvisioningOptions"
       responses:
-        '200': { description: Group visibility and type details }
- 
+        '200':
+          description: Group visibility and type details
+
   /sites/{siteId}/permissions:
     get:
       operationId: GetSitePermissions
@@ -96,10 +100,12 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        '200': { description: Permission grants for the site }
- 
+        '200':
+          description: Permission grants for the site
+
   /groups/{groupId}/team:
     get:
       operationId: GetSiteTeamsAssociation
@@ -108,15 +114,20 @@ paths:
         - name: groupId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
-          schema: { type: string, default: "id,displayName,webUrl" }
+          schema:
+            type: string
+            default: "id,displayName,webUrl"
       responses:
-        '200': { description: Teams team details if associated }
-        '404': { description: No Teams team provisioned for this group }
- 
+        '200':
+          description: Teams team details if associated
+        '404':
+          description: No Teams team provisioned for this group
+
   /teams/{teamId}/channels:
     get:
       operationId: GetSiteChannelAssociation
@@ -125,7 +136,8 @@ paths:
         - name: teamId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
@@ -139,8 +151,9 @@ paths:
             type: string
             default: "membershipType eq 'private' or membershipType eq 'shared'"
       responses:
-        '200': { description: Channel list with SharePoint site URL per channel }
- 
+        '200':
+          description: Channel list with SharePoint site URL per channel
+
   /sites/{siteId}/lists:
     get:
       operationId: ListSiteLists
@@ -149,7 +162,8 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
@@ -157,8 +171,9 @@ paths:
             type: string
             default: "id,displayName,list,createdDateTime,webUrl"
       responses:
-        '200': { description: All lists and libraries in the site }
- 
+        '200':
+          description: All lists and libraries in the site
+
   /sites/{siteId}/lists/{listId}:
     get:
       operationId: GetListSettings
@@ -167,18 +182,23 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: listId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $expand
           in: query
           required: false
-          schema: { type: string, default: "contentTypes,columns" }
+          schema:
+            type: string
+            default: "contentTypes,columns"
       responses:
-        '200': { description: List configuration including versioning and content types }
- 
+        '200':
+          description: List configuration including versioning and content types
+
   /sites/{siteId}/settings:
     get:
       operationId: GetSharingSettings
@@ -192,7 +212,8 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
@@ -200,8 +221,9 @@ paths:
             type: string
             default: "sharingCapability,sharingDomainRestrictionMode,sharingAllowedDomainList"
       responses:
-        '200': { description: Site sharing and governance settings }
- 
+        '200':
+          description: Site sharing and governance settings
+
   /admin/sharepoint/settings:
     get:
       operationId: GetTenantSharingSettings
@@ -213,10 +235,13 @@ paths:
         - name: $select
           in: query
           required: false
-          schema: { type: string, default: "sharingCapability,defaultSharingLinkType" }
+          schema:
+            type: string
+            default: "sharingCapability,defaultSharingLinkType"
       responses:
-        '200': { description: Tenant-level sharing configuration }
- 
+        '200':
+          description: Tenant-level sharing configuration
+
   /sites/{siteId}/analytics/allTime:
     get:
       operationId: GetSiteActivity
@@ -228,10 +253,12 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        '200': { description: Site activity statistics }
- 
+        '200':
+          description: Site activity statistics
+
   /sites/{siteId}/drive:
     get:
       operationId: GetSiteStorageUsage
@@ -240,14 +267,18 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
-          schema: { type: string, default: "quota,name,webUrl" }
+          schema:
+            type: string
+            default: "quota,name,webUrl"
       responses:
-        '200': { description: Drive quota and storage usage details }
- 
+        '200':
+          description: Drive quota and storage usage details
+
   /groups/{groupId}/owners:
     get:
       operationId: GetSiteGroupOwners
@@ -259,16 +290,18 @@ paths:
         - name: groupId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
-          schema: { type: string, default: "displayName,userPrincipalName,mail,id,jobTitle" }
+          schema:
+            type: string
+            default: "displayName,userPrincipalName,mail,id,jobTitle"
       responses:
-        '200': { description: List of group owners }
- 
-  # GetSiteAdmins reuses /sites/{siteId}/permissions with $filter=roles/any(r: r eq 'fullControl')
- 
+        '200':
+          description: List of group owners
+
   /admin/sharepoint/sites/{spoSiteId}:
     get:
       operationId: GetSiteAdminDetails
@@ -281,14 +314,18 @@ paths:
         - name: spoSiteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $select
           in: query
           required: false
-          schema: { type: string, default: "siteCollectionAdmins,primaryAdmin,url" }
+          schema:
+            type: string
+            default: "siteCollectionAdmins,primaryAdmin,url"
       responses:
-        '200': { description: Site collection admins and primary admin }
- 
+        '200':
+          description: Site collection admins and primary admin
+
   /sites/{siteId}/columns:
     get:
       operationId: GetSiteColumns
@@ -297,10 +334,12 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        '200': { description: Site column definitions }
- 
+        '200':
+          description: Site column definitions
+
   /sites/{siteId}/contentTypes:
     get:
       operationId: GetSiteContentTypes
@@ -309,14 +348,18 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: $expand
           in: query
           required: false
-          schema: { type: string, default: "columns" }
+          schema:
+            type: string
+            default: "columns"
       responses:
-        '200': { description: Content types and their column schemas }
- 
+        '200':
+          description: Content types and their column schemas
+
   /sites/{siteId}/termStore:
     get:
       operationId: GetTermStore
@@ -325,10 +368,12 @@ paths:
         - name: siteId
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        '200': { description: Term store configuration and groups }
- 
+        '200':
+          description: Term store configuration and groups
+
 components:
   securitySchemes:
     oauth2ClientCredentials:
