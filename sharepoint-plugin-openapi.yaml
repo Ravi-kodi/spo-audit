@@ -6,7 +6,7 @@ info:
     Fetches SharePoint site configuration, governance, permissions,
     sharing policies, teams associations, activity, storage, owners,
     and admins via Microsoft Graph API for Security Copilot agents.
-  version: "2.3.0"
+  version: "2.2.0"
   contact:
     name: Security Engineering Team
 
@@ -31,7 +31,6 @@ paths:
         this operation. This tenant's Graph API returns all sites without
         requiring $search=*, and sending that parameter without correct
         handling causes HTTP 400. Use $select to filter fields instead.
-        Do NOT add $search=* or ConsistencyLevel headers to this call.
       parameters:
         - name: $select
           in: query
@@ -39,23 +38,12 @@ paths:
           schema:
             type: string
             default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime"
-          description: >
-            Comma-separated list of fields to return for each site.
-            Do not include 'name' — use 'displayName' instead.
-        - name: $top
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 200
-          description: >
-            Maximum number of results per page. Follow @odata.nextLink
-            for subsequent pages until no nextLink is present.
+          description: Comma-separated list of fields to return for each site.
       responses:
         '200':
           description: List of site collections
         '400':
-          description: Bad request — malformed query parameter (commonly caused by $search=*)
+          description: Bad request — malformed query parameter
         '403':
           description: Forbidden — Sites.Read.All permission not granted
 
@@ -63,12 +51,6 @@ paths:
     get:
       operationId: GetSiteDetails
       summary: Get configuration details and sharepointIds for a specific site
-      description: >
-        siteId must be in hostname:/sites/SiteName format derived from the
-        full site URL, for example acp200327.sharepoint.com:/sites/Finance.
-        Do not pass a bare root hostname (e.g. acp200327.sharepoint.com)
-        without a /sites/ path — this will return a 400 or resolve to the
-        root site, not the intended site.
       parameters:
         - name: siteId
           in: path
@@ -76,20 +58,17 @@ paths:
           schema:
             type: string
           description: >
-            SharePoint site ID in hostname:/sites/SiteName format or
+            SharePoint site ID. Use hostname:/sites/SiteName format or
             the GUID-based ID returned from ListAllSites.
-            Example: acp200327.sharepoint.com:/sites/Finance
         - name: $select
           in: query
           required: false
           schema:
             type: string
-            default: "id,displayName,webUrl,sharepointIds,createdDateTime,lastModifiedDateTime,description,siteCollection"
+            default: "id,displayName,webUrl,sharepointIds,createdDateTime"
       responses:
         '200':
-          description: >
-            Site details including sharepointIds (groupId, siteId GUID,
-            siteUrl, webId) for dependency resolution by downstream calls.
+          description: Site details including sharepointIds for dependency resolution
 
   /groups/{groupId}:
     get:
@@ -98,21 +77,19 @@ paths:
       description: >
         Resolves the M365 group visibility (Public or Private). Returns
         NotApplicable for Hub sites, Communication sites, and classic sites
-        with no M365 group. groupId obtained from GetSiteDetails sharepointIds.groupId.
+        with no M365 group. groupId obtained from GetSiteDetails sharepointIds.
       parameters:
         - name: groupId
           in: path
           required: true
           schema:
             type: string
-          description: >
-            M365 Group ID from sharepointIds.groupId returned by GetSiteDetails.
         - name: $select
           in: query
           required: false
           schema:
             type: string
-            default: "id,displayName,visibility,groupTypes,resourceProvisioningOptions"
+            default: "visibility,groupTypes,resourceProvisioningOptions"
       responses:
         '200':
           description: Group visibility and type details
@@ -120,54 +97,16 @@ paths:
   /sites/{siteId}/permissions:
     get:
       operationId: GetSitePermissions
-      summary: Retrieve all site-level permission grants for a SharePoint site
-      description: >
-        Returns site-level permission grants only. For item-level drive
-        permissions use GetDriveRootPermissions. Both calls are needed for
-        a complete oversharing risk scan.
+      summary: Retrieve all permission grants for a SharePoint site
       parameters:
         - name: siteId
           in: path
           required: true
           schema:
             type: string
-        - name: $select
-          in: query
-          required: false
-          schema:
-            type: string
-            default: "id,roles,grantedToIdentitiesV2,link,inheritedFrom"
       responses:
         '200':
-          description: Site-level permission grants
-        '403':
-          description: Forbidden — Sites.FullControl.All or Sites.Read.All not granted
-
-  /sites/{siteId}/drive/root/permissions:
-    get:
-      operationId: GetDriveRootPermissions
-      summary: Retrieve permission grants on the root drive item of a SharePoint site
-      description: >
-        Returns sharing links and direct grants on the root document library
-        drive item. Use alongside GetSitePermissions for a complete
-        oversharing scan. Requires Sites.Read.All scope.
-      parameters:
-        - name: siteId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: $select
-          in: query
-          required: false
-          schema:
-            type: string
-            default: "id,roles,grantedToIdentitiesV2,link"
-      responses:
-        '200':
-          description: Root drive item permission grants
-        '403':
-          description: Forbidden — Sites.Read.All not granted
+          description: Permission grants for the site
 
   /groups/{groupId}/team:
     get:
@@ -179,8 +118,6 @@ paths:
           required: true
           schema:
             type: string
-          description: >
-            M365 Group ID from sharepointIds.groupId returned by GetSiteDetails.
         - name: $select
           in: query
           required: false
@@ -196,13 +133,7 @@ paths:
   /teams/{teamId}/channels:
     get:
       operationId: GetSiteChannelAssociation
-      summary: >
-        List all Teams channels (standard, private, shared) for a team,
-        including the SharePoint file folder URL per channel
-      description: >
-        Returns all channels with their filesFolderWebUrl inline. This
-        single call replaces separate per-channel filesFolder sub-calls.
-        Filter client-side for private/shared channels if needed.
+      summary: Check if a SharePoint site backs a Teams private or shared channel
       parameters:
         - name: teamId
           in: path
@@ -214,12 +145,16 @@ paths:
           required: false
           schema:
             type: string
-            default: "id,displayName,membershipType,webUrl,filesFolderWebUrl"
+            default: "id,displayName,membershipType,filesFolderWebUrl"
+        - name: $filter
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "membershipType eq 'private' or membershipType eq 'shared'"
       responses:
         '200':
-          description: >
-            Channel list with membershipType and filesFolderWebUrl per channel.
-            No secondary per-channel filesFolder call is needed.
+          description: Channel list with SharePoint site URL per channel
 
   /sites/{siteId}/lists:
     get:
@@ -297,24 +232,17 @@ paths:
       summary: Get tenant-level SharePoint sharing defaults (fallback)
       description: >
         Fallback — call when site-level sharingCapability is null.
-        Requires SharePointTenantSettings.Read.All permission AND the
-        SharePoint Administrator or Global Administrator directory role
-        on the service principal. Sites.Read.All alone is not sufficient.
-        On 403, do not retry — record the failure and continue.
+        Requires SharePointTenantSettings.Read.All permission.
       parameters:
         - name: $select
           in: query
           required: false
           schema:
             type: string
-            default: "sharingCapability,defaultSharingLinkType,defaultLinkPermission,requireAnonymousLinksExpireInDays,anonymousLinkExpirationInDays,sharingDomainRestrictionMode,sharingAllowedDomainList,sharingBlockedDomainList,isExternalUserSelfServiceSignUpEnabled"
+            default: "sharingCapability,defaultSharingLinkType"
       responses:
         '200':
           description: Tenant-level sharing configuration
-        '403':
-          description: >
-            Forbidden — service principal lacks SharePoint Administrator or
-            Global Administrator directory role in Entra ID.
 
   /sites/{siteId}/analytics/allTime:
     get:
@@ -322,10 +250,7 @@ paths:
       summary: Get last activity date for a SharePoint site including read access
       description: >
         Returns site activity stats including read access events.
-        Use lastActivityDateTime from the response for the inventory
-        "Last content modification date" row. Falls back to
-        lastModifiedDateTime from GetSiteDetails if analytics data
-        is unavailable (404 or empty response).
+        Falls back to lastModifiedDateTime if analytics data unavailable.
       parameters:
         - name: siteId
           in: path
@@ -334,9 +259,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Site activity statistics including lastActivityDateTime
-        '404':
-          description: Analytics not available for this site — use lastModifiedDateTime fallback
+          description: Site activity statistics
 
   /sites/{siteId}/drive:
     get:
@@ -353,13 +276,10 @@ paths:
           required: false
           schema:
             type: string
-            default: "id,name,driveType,webUrl,quota"
+            default: "quota,name,webUrl"
       responses:
         '200':
-          description: >
-            Drive quota and storage usage. quota object contains:
-            used, total, remaining, deleted (all in bytes), and state
-            (normal, nearing, critical, exceeded).
+          description: Drive quota and storage usage details
 
   /groups/{groupId}/owners:
     get:
@@ -368,48 +288,36 @@ paths:
       description: >
         Returns the M365 group owner list (= effective site owners for
         modern team sites). Empty array = orphaned site (HIGH RISK).
-        companyName is included to enable external-owner detection.
       parameters:
         - name: groupId
           in: path
           required: true
           schema:
             type: string
-          description: >
-            M365 Group ID from sharepointIds.groupId returned by GetSiteDetails.
         - name: $select
           in: query
           required: false
           schema:
             type: string
-            default: "id,displayName,userPrincipalName,mail,jobTitle,department,companyName"
+            default: "displayName,userPrincipalName,mail,id,jobTitle"
       responses:
         '200':
-          description: List of group owners including companyName for external-owner detection
+          description: List of group owners
 
   /admin/sharepoint/sites/{spoSiteId}:
     get:
       operationId: GetSiteAdminDetails
-      summary: >
-        Get definitive site collection admin list from SharePoint Admin API
-        (authoritative source)
+      summary: Get definitive site collection admin list from SharePoint Admin API
       description: >
-        Authoritative source for site collection admins and primary admin.
-        Use the SharePoint site GUID from sharepointIds.siteId (NOT the
-        Graph composite ID). Requires SharePointTenantSettings.Read.All
-        permission AND SharePoint Administrator or Global Administrator
-        directory role on the service principal.
-        On 403, record the failure and fall back to filtering
-        GetSitePermissions results for fullControl entries.
+        Authoritative source for site collection admins. Use the
+        SharePoint site GUID (sharepointIds.siteId), not the Graph composite ID.
+        Requires SharePointTenantSettings.Read.All permission.
       parameters:
         - name: spoSiteId
           in: path
           required: true
           schema:
             type: string
-          description: >
-            SharePoint site GUID from sharepointIds.siteId returned by
-            GetSiteDetails. Do not use the Graph composite site ID here.
         - name: $select
           in: query
           required: false
@@ -419,10 +327,6 @@ paths:
       responses:
         '200':
           description: Site collection admins and primary admin
-        '403':
-          description: >
-            Forbidden — service principal lacks SharePoint Administrator role.
-            Fall back to fullControl entries from GetSitePermissions.
 
   /sites/{siteId}/columns:
     get:
