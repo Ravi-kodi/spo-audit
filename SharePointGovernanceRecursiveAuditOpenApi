@@ -1,0 +1,386 @@
+openapi: 3.0.0
+
+info:
+  title: SharePoint Configuration & Governance Plugin
+  description: >
+    Retrieves SharePoint governance, storage, activity, sharing, ownership,
+    Teams linkage, channel linkage, and recursive subsite data for
+    Security Copilot agents.
+
+    Notes:
+    - Core Microsoft Graph operations use v1.0.
+    - Site-level SharePoint settings use Microsoft Graph beta because the
+      siteSettings API is documented there.
+    - Two custom endpoints are included because Microsoft Graph does not provide
+      a single documented direct site->M365 group resolution API nor an
+      authoritative documented v1.0 site-admin endpoint for the exact output needed.
+  version: "3.1.0"
+  contact:
+    name: Security Engineering Team
+
+servers:
+  - url: https://graph.microsoft.com/v1.0
+    description: Microsoft Graph API v1.0
+
+security:
+  - oauth2ClientCredentials: []
+
+paths:
+
+  /sites/{hostname}:/{relativePath}:
+    get:
+      operationId: GetSiteByPath
+      summary: Resolve a SharePoint site from a full URL path
+      description: >
+        Primary resolver for site audits when the user provides a site URL.
+      parameters:
+        - name: hostname
+          in: path
+          required: true
+          schema:
+            type: string
+          description: SharePoint hostname, for example contoso.sharepoint.com
+        - name: relativePath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Server-relative path without a leading slash, for example sites/Finance
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime,sharepointIds,siteCollection,isPersonalSite"
+      responses:
+        '200':
+          description: Site resolved successfully
+        '404':
+          description: Site not found
+        '403':
+          description: Forbidden
+
+  /sites/{siteId}:
+    get:
+      operationId: GetSiteDetails
+      summary: Get SharePoint site metadata
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Graph site ID
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime,sharepointIds,siteCollection,isPersonalSite"
+      responses:
+        '200':
+          description: Site details
+
+  /sites/{siteId}/sites:
+    get:
+      operationId: ListSubsites
+      summary: List direct child subsites of a SharePoint site
+      description: >
+        Returns the direct child subsites under the supplied site.
+        Use recursively when IncludeSubsites = true.
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime,sharepointIds,siteCollection"
+      responses:
+        '200':
+          description: Child subsites returned
+
+  /sites:
+    get:
+      operationId: ListAllSites
+      summary: List SharePoint sites in the tenant
+      description: >
+        Optional discovery operation. Do not use as the primary resolver when
+        a site URL is already known.
+      parameters:
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,webUrl,createdDateTime,lastModifiedDateTime"
+      responses:
+        '200':
+          description: Sites listed successfully
+
+  /custom/sharepoint/site-group-lookup:
+    post:
+      operationId: ResolveSiteToGroup
+      summary: Resolve whether a SharePoint site is group-connected and return its M365 group
+      description: >
+        Custom backend endpoint. Required because Microsoft Graph does not expose
+        a single documented direct site->groupId resolver for the required audit flow.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - siteWebUrl
+                - graphSiteId
+              properties:
+                siteWebUrl:
+                  type: string
+                graphSiteId:
+                  type: string
+      responses:
+        '200':
+          description: Group resolution result
+        '404':
+          description: Site is not group-connected
+
+  /groups/{groupId}:
+    get:
+      operationId: GetGroupDetails
+      summary: Get M365 group metadata
+      description: >
+        Used to determine visibility for group-connected sites.
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,visibility,groupTypes,resourceProvisioningOptions"
+      responses:
+        '200':
+          description: Group metadata
+
+  /groups/{groupId}/owners:
+    get:
+      operationId: GetGroupOwners
+      summary: Get owners of the M365 group
+      description: >
+        For group-connected team sites, this is the effective source for
+        M365 group owners and can also be used as site owners.
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,userPrincipalName,mail"
+      responses:
+        '200':
+          description: Group owners returned
+
+  /groups/{groupId}/team:
+    get:
+      operationId: GetTeamForGroup
+      summary: Check whether the M365 group has a Microsoft Team
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,webUrl"
+      responses:
+        '200':
+          description: Team exists for this group
+        '404':
+          description: No Team exists for this group
+
+  /teams/{teamId}/channels:
+    get:
+      operationId: ListTeamChannels
+      summary: List channels for a Team
+      description: >
+        Use to inspect private/shared channels when checking whether the audited
+        site is channel-backed.
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,displayName,membershipType"
+        - name: $filter
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "membershipType eq 'private' or membershipType eq 'shared'"
+      responses:
+        '200':
+          description: Channels returned
+
+  /teams/{teamId}/channels/{channelId}/filesFolder:
+    get:
+      operationId: GetChannelFilesFolder
+      summary: Get the SharePoint-backed files folder for a Teams channel
+      description: >
+        Use this to compare the folder/site URL against the audited site URL
+        to determine whether the site is associated to a private/shared channel.
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Channel files folder returned
+        '404':
+          description: Files folder not found
+
+  /sites/{siteId}/analytics/allTime:
+    get:
+      operationId: GetSiteActivity
+      summary: Get site activity statistics
+      description: >
+        Preferred source for last content activity when views/access need to be
+        considered. If unavailable, fall back to site.lastModifiedDateTime.
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Site activity stats returned
+
+  /sites/{siteId}/drive:
+    get:
+      operationId: GetSiteDrive
+      summary: Get the default document library for the site
+      description: >
+        Use quota.used and quota.total for current storage usage and quota.
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "id,name,webUrl,quota"
+      responses:
+        '200':
+          description: Site drive returned
+
+  /sites/{siteId}/settings:
+    get:
+      operationId: GetSiteSharingSettings
+      summary: Get site-level SharePoint sharing settings
+      description: >
+        Uses Microsoft Graph beta because siteSettings is documented there.
+        Use sharingCapability to determine whether external sharing is active
+        and what type is allowed.
+      servers:
+        - url: https://graph.microsoft.com/beta
+          description: Microsoft Graph beta for site settings
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "sharingCapability,sharingDomainRestrictionMode,sharingAllowedDomainList"
+      responses:
+        '200':
+          description: Site-level sharing settings returned
+        '404':
+          description: Site settings unavailable
+
+  /admin/sharepoint/settings:
+    get:
+      operationId: GetTenantSharingSettings
+      summary: Get tenant-level SharePoint sharing defaults
+      description: >
+        Use only as a fallback when the site-level sharing settings are not available.
+      parameters:
+        - name: $select
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "sharingCapability,defaultSharingLinkType"
+      responses:
+        '200':
+          description: Tenant-level SharePoint settings returned
+
+  /custom/sharepoint/sites/{spoSiteId}/admins:
+    get:
+      operationId: GetSiteAdmins
+      summary: Get authoritative site collection admins
+      description: >
+        Custom backend endpoint. Required because the original Graph-only
+        approach does not provide a clean documented v1.0 contract for the
+        exact site-admin output needed.
+      parameters:
+        - name: spoSiteId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Native SharePoint site ID, for example sharepointIds.siteId
+      responses:
+        '200':
+          description: Site admins returned
+        '404':
+          description: Admin details unavailable
+
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token
+          scopes:
+            https://graph.microsoft.com/.default: Default Microsoft Graph application scope
